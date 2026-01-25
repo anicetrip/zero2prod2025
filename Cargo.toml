@@ -17,15 +17,17 @@ tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros"] }
 reqwest = "0.13.1"
 serde = { version = "1.0.228", features = ["derive"] }
 config = "0.15.19"
+uuid = { version = "1", features = ["v4"] }
+#chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 
-#[dependencies.sqlx]
-#version = "0.8.6"
-#default-features = false
-#features = [
-#    "runtime-tokio-rustls",
-#    "macros",
-#    "postgres",
-#    "uuid",
-#    "chrono",
-#    "migrate"
-#]
+[dependencies.sqlx]
+version = "0.8.6"
+default-features = false
+features = [
+    "runtime-tokio-rustls",
+    "macros",
+    "postgres",
+    "uuid",
+    "chrono",
+    "migrate"
+]

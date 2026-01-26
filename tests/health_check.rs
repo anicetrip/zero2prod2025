@@ -1,8 +1,8 @@
 use reqwest::Client;
-use sqlx::{Connection, PgConnection, PgPool, query, Executor};
+use sqlx::{Connection, Executor, PgConnection, PgPool, query};
 use std::net::TcpListener;
 use uuid::Uuid;
-use zero2prod2025::configuration::{get_configuration, DatabaseSettings};
+use zero2prod2025::configuration::{DatabaseSettings, get_configuration};
 use zero2prod2025::startup::run;
 
 pub struct TestApp {

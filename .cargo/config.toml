@@ -2,4 +2,4 @@
 rustflags = ["-C", "linker=clang", "-C", "link-arg=-fuse-ld=lld"]
 
 [env]
-SQLX_OFFLINE = "false"
+SQLX_OFFLINE = "true"

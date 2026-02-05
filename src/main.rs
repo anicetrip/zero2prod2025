@@ -1,4 +1,3 @@
-
 use sqlx::postgres::PgPoolOptions;
 use std::net::TcpListener;
 use zero2prod2025::configuration::get_configuration;

@@ -1,0 +1,40 @@
+kind: pipeline
+type: docker
+name: z2p-axum-ci
+
+services:
+  - name: mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: newsletter
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --port=13306
+    ports:
+      - 13306
+
+steps:
+  - name: wait-for-mysql
+    image: mysql:8.0
+    commands:
+      - |
+        echo "Waiting for MySQL service at mysql:13306 ..."
+        for i in $(seq 1 60); do
+          mysql -h mysql -uroot -p1234 -P 13306 -e "SELECT 1" && exit 0
+          sleep 2
+        done
+        echo "MySQL not reachable on mysql:13306"
+        exit 1
+
+  - name: test
+    image: rust:bookworm
+    environment:
+      APP_DATABASE__HOST: mysql
+      APP_DATABASE__PORT: "13306"
+      APP_DATABASE__USERNAME: root
+      APP_DATABASE__PASSWORD: 1234
+      APP_DATABASE__DATABASE_NAME: newsletter
+      APP_DATABASE__REQUIRE_SSL: "false"
+    commands:
+      - cargo test

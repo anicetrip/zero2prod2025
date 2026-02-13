@@ -1,40 +1,61 @@
 kind: pipeline
 type: docker
-name: z2p-axum-ci
+name: zero2prod-ci
 
 services:
-  - name: mysql
-    image: mysql:8.0
+  - name: postgres
+    image: postgres:16
     environment:
-      MYSQL_ROOT_PASSWORD: 1234
-      MYSQL_DATABASE: newsletter
-    command:
-      - --default-authentication-plugin=mysql_native_password
-      - --port=13306
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
     ports:
-      - 13306
+      - 5432
 
 steps:
-  - name: wait-for-mysql
-    image: mysql:8.0
+  # --------------------------------------------
+  # 等待 PostgreSQL 就绪
+  # --------------------------------------------
+  - name: wait-for-postgres
+    image: postgres:16
     commands:
       - |
-        echo "Waiting for MySQL service at mysql:13306 ..."
+        echo "Waiting for PostgreSQL at postgres:5432..."
         for i in $(seq 1 60); do
-          mysql -h mysql -uroot -p1234 -P 13306 -e "SELECT 1" && exit 0
+          pg_isready -h postgres -p 5432 -U postgres && exit 0
           sleep 2
         done
-        echo "MySQL not reachable on mysql:13306"
+        echo "Postgres not ready"
         exit 1
 
+  # --------------------------------------------
+  # 运行测试
+  # --------------------------------------------
   - name: test
     image: rust:bookworm
     environment:
-      APP_DATABASE__HOST: mysql
-      APP_DATABASE__PORT: "13306"
-      APP_DATABASE__USERNAME: root
-      APP_DATABASE__PASSWORD: 1234
-      APP_DATABASE__DATABASE_NAME: newsletter
+      DATABASE_URL: postgres://postgres:password@postgres:5432/newsletter_${DRONE_BUILD_NUMBER}
+      APP_DATABASE__HOST: postgres
+      APP_DATABASE__PORT: "5432"
+      APP_DATABASE__USERNAME: postgres
+      APP_DATABASE__PASSWORD: password
+      APP_DATABASE__DATABASE_NAME: newsletter_${DRONE_BUILD_NUMBER}
       APP_DATABASE__REQUIRE_SSL: "false"
+      SQLX_OFFLINE: "true"
     commands:
-      - cargo test
+      - |
+        apt-get update
+        apt-get install -y postgresql-client
+
+        echo "Creating test database..."
+        export PGPASSWORD=password
+        createdb -h postgres -U postgres newsletter_${DRONE_BUILD_NUMBER}
+
+        echo "Installing sqlx-cli..."
+        cargo install sqlx-cli --no-default-features --features postgres
+
+        echo "Running migrations..."
+        sqlx migrate run
+
+        echo "Running tests..."
+        cargo test --all --verbose

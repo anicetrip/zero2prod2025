@@ -1,13 +1,7 @@
+use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug)]
 pub struct SubscriberName(String);
-
-use unicode_segmentation::UnicodeSegmentation;
-
-pub struct NewSubscriber {
-    pub email: String,
-    pub name: SubscriberName,
-}
 
 impl SubscriberName {
     /// Returns an instance of `SubscriberName` if the input satisfies all
@@ -39,14 +33,11 @@ impl SubscriberName {
     }
 }
 
-
-
 impl AsRef<str> for SubscriberName {
     fn as_ref(&self) -> &str {
         &self.0
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -62,7 +53,6 @@ mod tests {
         let name = "a".repeat(257);
         assert_err!(SubscriberName::parse(name));
     }
-
 
     #[test]
     fn whitespace_only_names_are_rejected() {

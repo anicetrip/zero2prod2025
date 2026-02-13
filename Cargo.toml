@@ -31,6 +31,9 @@ chrono = "0.4.43"
 serde-aux = "4"
 unicode-segmentation = "1.12.0"
 claims = "0.8"
+validator = "0.20.0"
+fake = "4.4.0"
+
 
 
 [dependencies.sqlx]
@@ -46,5 +49,10 @@ features = [
 ]
 
 
+
+[dev-dependencies]
+# [...]
+quickcheck = "1.1.0"
+quickcheck_macros = "1.2.0"
 
 

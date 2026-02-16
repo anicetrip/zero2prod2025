@@ -1,6 +1,6 @@
 kind: pipeline
 type: docker
-name: z2p
+name: z2p-axum-ci
 
 platform:
   os: linux
@@ -11,11 +11,10 @@ platform:
 ############################################
 services:
   - name: postgres
-    image: postgres:16
+    image: postgres:latest
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: newsletter
     ports:
       - 5432
 
@@ -48,19 +47,22 @@ steps:
   # 等待 PostgreSQL 启动
   ##########################################
   - name: wait-for-postgres
-    image: postgres:16
+    image: postgres:latest
     commands:
       - |
-        echo "Waiting for PostgreSQL at postgres:5432..."
-        for i in $(seq 1 60); do
-          pg_isready -h postgres -p 5432 -U postgres && exit 0
+        echo "Waiting for PostgreSQL..."
+        for i in $(seq 1 120); do
+          pg_isready -h postgres -p 5432 -U postgres >/dev/null 2>&1 && {
+            echo "PostgreSQL is ready!"
+            exit 0
+          }
           sleep 2
         done
-        echo "Postgres not ready"
+        echo "PostgreSQL failed to start"
         exit 1
 
   ##########################################
-  # 生成覆盖率（依赖 PostgreSQL 就绪）
+  # 生成覆盖率（依赖 test 成功）
   ##########################################
   - name: coverage
     image: xd009642/tarpaulin:latest
@@ -71,10 +73,9 @@ steps:
       APP_DATABASE__HOST: postgres
       APP_DATABASE__PORT: "5432"
       APP_DATABASE__USERNAME: postgres
-      APP_DATABASE__PASSWORD: password
-      APP_DATABASE__DATABASE_NAME: newsletter_${DRONE_BUILD_NUMBER}
+      APP_DATABASE__PASSWORD: 1234
+      APP_DATABASE__DATABASE_NAME: newsletter
       APP_DATABASE__REQUIRE_SSL: "false"
-      SQLX_OFFLINE: "true"
     volumes:
       - name: cargo-registry
         path: /usr/local/cargo/registry
@@ -85,24 +86,27 @@ steps:
       - name: coverage-output
         path: /coverage
     commands:
-      - echo "Creating test database..."
-      - export PGPASSWORD=password
-      - createdb -h postgres -U postgres newsletter_${DRONE_BUILD_NUMBER}
       - echo "Running tarpaulin..."
       - cargo fetch
       - cargo tarpaulin --out Html --out Lcov --all --workspace
+
       - echo "Saving coverage..."
+
       - mkdir -p /coverage/${DRONE_BUILD_NUMBER}
       - cp tarpaulin-report.html /coverage/${DRONE_BUILD_NUMBER}/
       - cp lcov.info /coverage/${DRONE_BUILD_NUMBER}/
+
       - rm -rf /coverage/latest
       - cp -r /coverage/${DRONE_BUILD_NUMBER} /coverage/latest
+
       - echo "Cleaning old coverage builds (keep latest 2)..."
+
       - |
         cd /coverage
         ls -1d [0-9]* 2>/dev/null | sort -nr | tail -n +3 | while read dir; do
           echo "Removing old build: $dir"
           rm -rf "$dir"
         done
+
       - echo "Coverage saved to:"
       - echo "/var/lib/drone/artifacts/coverage/${DRONE_BUILD_NUMBER}"

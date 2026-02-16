@@ -63,7 +63,7 @@ steps:
   # 生成覆盖率（依赖 PostgreSQL 就绪）
   ##########################################
   - name: coverage
-    image: rust:bookworm
+    image: xd009642/tarpaulin:latest
     privileged: true
     depends_on:
       - wait-for-postgres
@@ -75,7 +75,6 @@ steps:
       APP_DATABASE__DATABASE_NAME: newsletter_${DRONE_BUILD_NUMBER}
       APP_DATABASE__REQUIRE_SSL: "false"
       SQLX_OFFLINE: "true"
-      RUSTFLAGS: "-C linker=clang"
     volumes:
       - name: cargo-registry
         path: /usr/local/cargo/registry
@@ -86,7 +85,6 @@ steps:
       - name: coverage-output
         path: /coverage
     commands:
-      - apt-get update && apt-get install -y postgresql-client clang lld
       - echo "Creating test database..."
       - export PGPASSWORD=password
       - createdb -h postgres -U postgres newsletter_${DRONE_BUILD_NUMBER}

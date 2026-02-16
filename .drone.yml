@@ -77,7 +77,7 @@ steps:
       APP_DATABASE__PASSWORD: 1234
       APP_DATABASE__DATABASE_NAME: newsletter
       APP_DATABASE__REQUIRE_SSL: "false"
-      SQLX_OFFLINE = "true"
+      SQLX_OFFLINE : "true"
     volumes:
       - name: cargo-registry
         path: /usr/local/cargo/registry

@@ -1,7 +1,14 @@
 kind: pipeline
 type: docker
-name: zero2prod-ci
+name: z2p
 
+platform:
+  os: linux
+  arch: amd64
+
+############################################
+# PostgreSQL 服务容器（测试用）
+############################################
 services:
   - name: postgres
     image: postgres:16
@@ -12,10 +19,34 @@ services:
     ports:
       - 5432
 
+############################################
+# Host Volumes（需要 Trusted 仓库）
+############################################
+volumes:
+  - name: cargo-registry
+    host:
+      path: /var/lib/drone/cargo/registry
+
+  - name: cargo-git
+    host:
+      path: /var/lib/drone/cargo/git
+
+  - name: cargo-target
+    host:
+      path: /var/lib/drone/cargo/target
+
+  - name: coverage-output
+    host:
+      path: /var/lib/drone/artifacts/coverage
+
+############################################
+# CI Steps
+############################################
 steps:
-  # --------------------------------------------
-  # 等待 PostgreSQL 就绪
-  # --------------------------------------------
+
+  ##########################################
+  # 等待 PostgreSQL 启动
+  ##########################################
   - name: wait-for-postgres
     image: postgres:16
     commands:
@@ -28,13 +59,15 @@ steps:
         echo "Postgres not ready"
         exit 1
 
-  # --------------------------------------------
-  # 运行测试
-  # --------------------------------------------
-  - name: test
+  ##########################################
+  # 生成覆盖率（依赖 PostgreSQL 就绪）
+  ##########################################
+  - name: coverage
     image: rust:bookworm
+    privileged: true
+    depends_on:
+      - wait-for-postgres
     environment:
-      DATABASE_URL: postgres://postgres:password@postgres:5432/newsletter_${DRONE_BUILD_NUMBER}
       APP_DATABASE__HOST: postgres
       APP_DATABASE__PORT: "5432"
       APP_DATABASE__USERNAME: postgres
@@ -42,20 +75,36 @@ steps:
       APP_DATABASE__DATABASE_NAME: newsletter_${DRONE_BUILD_NUMBER}
       APP_DATABASE__REQUIRE_SSL: "false"
       SQLX_OFFLINE: "true"
+      RUSTFLAGS: "-C linker=clang"
+    volumes:
+      - name: cargo-registry
+        path: /usr/local/cargo/registry
+      - name: cargo-git
+        path: /usr/local/cargo/git
+      - name: cargo-target
+        path: /drone/src/target
+      - name: coverage-output
+        path: /coverage
     commands:
+      - apt-get update && apt-get install -y postgresql-client clang lld
+      - echo "Creating test database..."
+      - export PGPASSWORD=password
+      - createdb -h postgres -U postgres newsletter_${DRONE_BUILD_NUMBER}
+      - echo "Running tarpaulin..."
+      - cargo fetch
+      - cargo tarpaulin --out Html --out Lcov --all --workspace
+      - echo "Saving coverage..."
+      - mkdir -p /coverage/${DRONE_BUILD_NUMBER}
+      - cp tarpaulin-report.html /coverage/${DRONE_BUILD_NUMBER}/
+      - cp lcov.info /coverage/${DRONE_BUILD_NUMBER}/
+      - rm -rf /coverage/latest
+      - cp -r /coverage/${DRONE_BUILD_NUMBER} /coverage/latest
+      - echo "Cleaning old coverage builds (keep latest 2)..."
       - |
-        apt-get update
-        apt-get install -y postgresql-client
-
-        echo "Creating test database..."
-        export PGPASSWORD=password
-        createdb -h postgres -U postgres newsletter_${DRONE_BUILD_NUMBER}
-
-        echo "Installing sqlx-cli..."
-        cargo install sqlx-cli --no-default-features --features postgres
-
-        echo "Running migrations..."
-        sqlx migrate run
-
-        echo "Running tests..."
-        cargo test --all --verbose
+        cd /coverage
+        ls -1d [0-9]* 2>/dev/null | sort -nr | tail -n +3 | while read dir; do
+          echo "Removing old build: $dir"
+          rm -rf "$dir"
+        done
+      - echo "Coverage saved to:"
+      - echo "/var/lib/drone/artifacts/coverage/${DRONE_BUILD_NUMBER}"

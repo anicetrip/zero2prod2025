@@ -106,10 +106,10 @@ steps:
       - rm -rf /coverage/${COVERAGE_PREFIX}-latest
       - cp -r /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER} /coverage/${COVERAGE_PREFIX}-latest
 
-      - echo "Cleaning old coverage builds (keep latest 2)..."
+      - echo "Cleaning old coverage builds (keep latest 1)..."
       - |
         cd /coverage
-        ls -1d ${COVERAGE_PREFIX}-* 2>/dev/null | sort -r | tail -n +3 | while read dir; do
+        ls -1d ${COVERAGE_PREFIX}-* 2>/dev/null | sort -r | tail -n +2 | while read dir; do
           echo "Removing old build: $dir"
           rm -rf "$dir"
         done

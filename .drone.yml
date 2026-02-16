@@ -116,4 +116,3 @@ steps:
 
       - echo "Coverage saved to:"
       - echo "/var/lib/drone/artifacts/coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}"
-    

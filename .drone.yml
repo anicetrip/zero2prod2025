@@ -65,54 +65,55 @@ steps:
   ##########################################
   # 生成覆盖率（依赖 test 成功）
   ##########################################
-- name: coverage
-  image: xd009642/tarpaulin:latest
-  privileged: true
-  depends_on:
-    - wait-for-postgres
-  environment:
-    APP_DATABASE__HOST: postgres
-    APP_DATABASE__PORT: "5432"
-    APP_DATABASE__USERNAME: postgres
-    APP_DATABASE__PASSWORD: 1234
-    APP_DATABASE__DATABASE_NAME: newsletter
-    APP_DATABASE__REQUIRE_SSL: "false"
-    SQLX_OFFLINE: "true"
-    # 自定义 coverage 前缀
-    COVERAGE_PREFIX: "z2p2025"
-  volumes:
-    - name: cargo-registry
-      path: /usr/local/cargo/registry
-    - name: cargo-git
-      path: /usr/local/cargo/git
-    - name: cargo-target
-      path: /drone/src/target
-    - name: coverage-output
-      path: /coverage
-  commands:
-    - echo "Cleaning stale cargo locks..."
-    - find /drone/src/target -name ".package-lock" -delete || true
-    - find /usr/local/cargo/registry -name ".package-lock" -delete || true
+  - name: coverage
+    image: xd009642/tarpaulin:latest
+    privileged: true
+    depends_on:
+      - wait-for-postgres
+    environment:
+      APP_DATABASE__HOST: postgres
+      APP_DATABASE__PORT: "5432"
+      APP_DATABASE__USERNAME: postgres
+      APP_DATABASE__PASSWORD: 1234
+      APP_DATABASE__DATABASE_NAME: newsletter
+      APP_DATABASE__REQUIRE_SSL: "false"
+      SQLX_OFFLINE: "true"
+      # 自定义 coverage 前缀
+      COVERAGE_PREFIX: "z2p2025"
+    volumes:
+      - name: cargo-registry
+        path: /usr/local/cargo/registry
+      - name: cargo-git
+        path: /usr/local/cargo/git
+      - name: cargo-target
+        path: /drone/src/target
+      - name: coverage-output
+        path: /coverage
+    commands:
+      - echo "Cleaning stale cargo locks..."
+      - find /drone/src/target -name ".package-lock" -delete || true
+      - find /usr/local/cargo/registry -name ".package-lock" -delete || true
 
-    - echo "Running tarpaulin..."
-    - cargo fetch
-    - cargo tarpaulin --skip-clean --target-dir /drone/src/target --out Html --out Lcov --all --workspace
+      - echo "Running tarpaulin..."
+      - cargo fetch
+      - cargo tarpaulin --skip-clean --target-dir /drone/src/target --out Html --out Lcov --all --workspace
 
-    - echo "Saving coverage..."
-    - mkdir -p /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}
-    - cp tarpaulin-report.html /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}/
-    - cp lcov.info /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}/
+      - echo "Saving coverage..."
+      - mkdir -p /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}
+      - cp tarpaulin-report.html /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}/
+      - cp lcov.info /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}/
 
-    - rm -rf /coverage/${COVERAGE_PREFIX}-latest
-    - cp -r /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER} /coverage/${COVERAGE_PREFIX}-latest
+      - rm -rf /coverage/${COVERAGE_PREFIX}-latest
+      - cp -r /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER} /coverage/${COVERAGE_PREFIX}-latest
 
-    - echo "Cleaning old coverage builds (keep latest 2)..."
-    - |
-      cd /coverage
-      ls -1d ${COVERAGE_PREFIX}-* 2>/dev/null | sort -r | tail -n +3 | while read dir; do
-        echo "Removing old build: $dir"
-        rm -rf "$dir"
-      done
+      - echo "Cleaning old coverage builds (keep latest 2)..."
+      - |
+        cd /coverage
+        ls -1d ${COVERAGE_PREFIX}-* 2>/dev/null | sort -r | tail -n +3 | while read dir; do
+          echo "Removing old build: $dir"
+          rm -rf "$dir"
+        done
 
-    - echo "Coverage saved to:"
-    - echo "/var/lib/drone/artifacts/coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}"
+      - echo "Coverage saved to:"
+      - echo "/var/lib/drone/artifacts/coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}"
+    

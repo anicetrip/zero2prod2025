@@ -26,3 +26,30 @@ pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     LogTracer::init().expect("Failed to set logger");
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
+
+
+use actix_web::dev::ServiceRequest;
+use tracing::{info_span, Span};
+use tracing_actix_web::RootSpanBuilder;
+use uuid::Uuid;
+
+pub struct CustomRootSpanBuilder;
+
+impl RootSpanBuilder for CustomRootSpanBuilder {
+    fn on_request_start(request: &ServiceRequest) -> Span {
+        let request_id = Uuid::new_v4();
+
+        info_span!(
+            "http_request",
+            request_id = %request_id,
+            method = %request.method(),
+            path = %request.path(),
+            client_ip = ?request.connection_info().realip_remote_addr(),
+            user_agent = ?request.headers().get("user-agent"),
+        )
+    }
+    
+    fn on_request_end<B: actix_web::body::MessageBody>(span: Span, outcome: &Result<actix_web::dev::ServiceResponse<B>, actix_web::Error>) {
+        //Do nothing.
+    }
+}

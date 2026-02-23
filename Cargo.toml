@@ -12,17 +12,20 @@ name = "zero2prod"
 
 
 [dependencies]
-actix-web = "4.12.1"
+actix-web = "4.13.0"
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros"] }
-reqwest = "0.13.2"
+
 serde = { version = "1.0.228", features = ["derive"] }
 config = "0.15.19"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1.21.0", features = ["v4"] }
 
 dotenvy = "0.15.7"
 
 tracing = { version = "0.1.44", features = ["log"] }
-tracing-subscriber = { version = "0.3.22", features = ["registry", "env-filter"] }
+tracing-subscriber = { version = "0.3.22", features = [
+    "registry",
+    "env-filter",
+] }
 tracing-bunyan-formatter = "0.3.10"
 tracing-log = "0.2.0"
 once_cell = "1.21.3"
@@ -33,8 +36,8 @@ unicode-segmentation = "1.12.0"
 claims = "0.8"
 validator = "0.20.0"
 fake = "4.4.0"
-
-
+tracing-actix-web = "0.7.21"
+url = { version = "2.5.8", features = ["serde"] }
 
 [dependencies.sqlx]
 version = "0.8.6"
@@ -48,11 +51,16 @@ features = [
     "migrate",
 ]
 
-
+[dependencies.reqwest]
+version = "0.13.2"
+default-features = false
+# We need the `json` feature flag to serialize/deserialize JSON payloads
+features = ["json", "rustls"]
 
 [dev-dependencies]
 # [...]
 quickcheck = "1.1.0"
 quickcheck_macros = "1.2.0"
-
-
+tokio = { version = "1.49.0", features = ["rt", "macros"] }
+wiremock = "0.6.5"
+serde_json = "1.0.149"

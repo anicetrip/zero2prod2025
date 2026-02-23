@@ -12,11 +12,9 @@ impl EmailClient {
         base_url: url::Url,
         sender: SubscriberEmail,
         authorization_token: SecretString,
+        timeout: std::time::Duration,
     ) -> Self {
-        let http_client = Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .unwrap();
+        let http_client = Client::builder().timeout(timeout).build().unwrap();
         Self {
             http_client,
             base_url,
@@ -79,32 +77,44 @@ mod tests {
     use wiremock::matchers::{header, header_exists, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    fn subject() -> String {
+        Sentence(1..2).fake()
+    }
+
+    fn content() -> String {
+        Paragraph(1..10).fake()
+    }
+
+    fn email() -> SubscriberEmail {
+        SubscriberEmail::parse(SafeEmail().fake()).unwrap()
+    }
+
+    fn email_client(mock_server: &MockServer) -> EmailClient {
+        EmailClient::new(
+            mock_server.uri().parse().unwrap(),
+            email(),
+            SecretString::new(Faker.fake::<String>().into()),
+            std::time::Duration::from_millis(200),
+        )
+    }
+
     #[tokio::test]
     async fn send_email_fires_a_request_to_base_url() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(
-            mock_server.uri().parse().unwrap(),
-            sender,
-            SecretString::new(Faker.fake::<String>().into()),
-        );
+        let email_client = email_client(&mock_server);
         Mock::given(header_exists("X-Postmark-Server-Token"))
             .and(header("Content-Type", "application/json"))
             .and(path("/email"))
             .and(method("POST"))
-            // Use our custom matcher!
             .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
             .mount(&mock_server)
             .await;
-        let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let subject: String = Sentence(1..2).fake();
-        let content: String = Paragraph(1..10).fake();
         // Act
         let _ = email_client
-            .send_email(subscriber_email, &subject, &content, &content)
+            .send_email(email(), &subject(), &content(), &content())
             .await;
         // Assert
     }
@@ -135,20 +145,7 @@ mod tests {
     async fn send_email_succeeds_if_the_server_returns_200() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(
-            mock_server.uri().parse().unwrap(),
-            sender,
-            SecretString::new(Faker.fake::<String>().into()),
-        );
-        let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let subject: String = Sentence(1..2).fake();
-        let content: String = Paragraph(1..10).fake();
-        // We do not copy in all the matchers we have in the other test.
-        // The purpose of this test is not to assert on the request we
-        // are sending out!
-        // We add the bare minimum needed to trigger the path we want
-        // to test in `send_email`.
+        let email_client = email_client(&mock_server);
         Mock::given(any())
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
@@ -156,7 +153,7 @@ mod tests {
             .await;
         // Act
         let outcome = email_client
-            .send_email(subscriber_email, &subject, &content, &content)
+            .send_email(email(), &subject(), &content(), &content())
             .await;
         // Assert
         assert_ok!(outcome);
@@ -165,15 +162,7 @@ mod tests {
     async fn send_email_fails_if_the_server_returns_500() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(
-            mock_server.uri().parse().unwrap(),
-            sender,
-            SecretString::new(Faker.fake::<String>().into()),
-        );
-        let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let subject: String = Sentence(1..2).fake();
-        let content: String = Paragraph(1..10).fake();
+        let email_client = email_client(&mock_server);
         Mock::given(any())
             // Not a 200 anymore!
             .respond_with(ResponseTemplate::new(500))
@@ -182,7 +171,7 @@ mod tests {
             .await;
         // Act
         let outcome = email_client
-            .send_email(subscriber_email, &subject, &content, &content)
+            .send_email(email(), &subject(), &content(), &content())
             .await;
         // Assert
         assert_err!(outcome);
@@ -192,15 +181,7 @@ mod tests {
     async fn send_email_times_out_if_the_server_takes_too_long() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(
-            mock_server.uri().parse().unwrap(),
-            sender,
-            SecretString::new(Faker.fake::<String>().into()),
-        );
-        let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let subject: String = Sentence(1..2).fake();
-        let content: String = Paragraph(1..10).fake();
+        let email_client = email_client(&mock_server);
         let response = ResponseTemplate::new(200)
             // 3 minutes!
             .set_delay(std::time::Duration::from_secs(180));
@@ -211,7 +192,7 @@ mod tests {
             .await;
         // Act
         let outcome = email_client
-            .send_email(subscriber_email, &subject, &content, &content)
+            .send_email(email(), &subject(), &content(), &content())
             .await;
         // Assert
         assert_err!(outcome);

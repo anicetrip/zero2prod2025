@@ -114,7 +114,8 @@ steps:
       # 安装工具（首次运行会缓存）
       ###################################
       - echo "Installing sccache..."
-      - cargo install sccache --locked || true
+      - export PATH="/cargo/bin:$PATH"
+      - RUSTC_WRAPPER= cargo install sccache --locked || true
 
       ###################################
       # 启动 sccache

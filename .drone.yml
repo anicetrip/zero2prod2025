@@ -1,17 +1,17 @@
 kind: pipeline
 type: docker
-name: z2p-axum-ci
+name: rust-ci
 
 platform:
   os: linux
   arch: amd64
 
 ############################################
-# PostgreSQL 服务容器（测试用）
+# PostgreSQL（测试数据库）
 ############################################
 services:
   - name: postgres
-    image: postgres:latest
+    image: postgres:16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1234
@@ -20,22 +20,27 @@ services:
       - 5432
 
 ############################################
-# Host Volumes（需要 Trusted 仓库）
+# 全局缓存（需要 Trusted 仓库）
 ############################################
 volumes:
-  - name: cargo-registry
-    host:
-      path: /var/lib/drone/cargo/registry
 
-  - name: cargo-git
+  # Cargo 全局缓存
+  - name: cargo-home
     host:
-      path: /var/lib/drone/cargo/git
+      path: /var/lib/drone/cargo
 
+  # 编译产物缓存
   - name: cargo-target
     host:
-      path: /var/lib/drone/cargo/target
+      path: /var/lib/drone/target
 
-  - name: coverage-output
+  # sccache 编译缓存
+  - name: sccache
+    host:
+      path: /var/lib/drone/sccache
+
+  # 覆盖率报告
+  - name: coverage
     host:
       path: /var/lib/drone/artifacts/coverage
 
@@ -45,74 +50,118 @@ volumes:
 steps:
 
   ##########################################
-  # 等待 PostgreSQL 启动
+  # 等待数据库启动
   ##########################################
-  - name: wait-for-postgres
-    image: postgres:latest
+  - name: wait-db
+    image: postgres:16
     commands:
       - |
         echo "Waiting for PostgreSQL..."
-        for i in $(seq 1 120); do
-          pg_isready -h postgres -p 5432 -U postgres >/dev/null 2>&1 && {
-            echo "PostgreSQL is ready!"
-            exit 0
-          }
+        for i in $(seq 1 60); do
+          pg_isready -h postgres -U postgres && exit 0
           sleep 2
         done
-        echo "PostgreSQL failed to start"
+        echo "Postgres failed"
         exit 1
 
   ##########################################
-  # 生成覆盖率（依赖 test 成功）
+  # Rust 测试 + 覆盖率（极速版）
   ##########################################
-  - name: coverage
+  - name: test-and-coverage
     image: xd009642/tarpaulin:latest
     privileged: true
     depends_on:
-      - wait-for-postgres
+      - wait-db
+
     environment:
+      # ========== Cargo ==========
+      CARGO_HOME: /cargo
+      CARGO_TARGET_DIR: /cargo-target
+
+      # ========== sccache ==========
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: /sccache
+      SCCACHE_CACHE_SIZE: 15G
+      SCCACHE_IDLE_TIMEOUT: 0
+
+      # ========== 数据库 ==========
       APP_DATABASE__HOST: postgres
       APP_DATABASE__PORT: "5432"
       APP_DATABASE__USERNAME: postgres
       APP_DATABASE__PASSWORD: 1234
       APP_DATABASE__DATABASE_NAME: newsletter
       APP_DATABASE__REQUIRE_SSL: "false"
+
       SQLX_OFFLINE: "true"
-      # 自定义 coverage 前缀
-      COVERAGE_PREFIX: "z2p2025"
+
+      COVERAGE_PREFIX: "coverage"
+
     volumes:
-      - name: cargo-registry
-        path: /usr/local/cargo/registry
-      - name: cargo-git
-        path: /usr/local/cargo/git
+      - name: cargo-home
+        path: /cargo
+
       - name: cargo-target
-        path: /drone/src/target
-      - name: coverage-output
+        path: /cargo-target
+
+      - name: sccache
+        path: /sccache
+
+      - name: coverage
         path: /coverage
+
     commands:
-      - echo "Cleaning stale cargo locks..."
-      - find /drone/src/target -name ".package-lock" -delete || true
-      - find /usr/local/cargo/registry -name ".package-lock" -delete || true
+      ###################################
+      # 安装工具（首次运行会缓存）
+      ###################################
+      - echo "Installing sccache..."
+      - cargo install sccache --locked || true
 
-      - echo "Running tarpaulin..."
+      ###################################
+      # 启动 sccache
+      ###################################
+      - sccache --start-server || true
+      - sccache --zero-stats || true
+
+      ###################################
+      # 清理陈旧锁（防止 CI 崩溃）
+      ###################################
+      - find /cargo-target -name ".package-lock" -delete || true
+      - find /cargo/registry -name ".package-lock" -delete || true
+
+      ###################################
+      # 预下载依赖（命中缓存）
+      ###################################
       - cargo fetch
-      - cargo tarpaulin --skip-clean --target-dir /drone/src/target --out Html --out Lcov --all --workspace
 
-      - echo "Saving coverage..."
-      - mkdir -p /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}
-      - cp tarpaulin-report.html /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}/
-      - cp lcov.info /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}/
+      ###################################
+      # 运行测试 & 覆盖率
+      ###################################
+      - cargo tarpaulin
+        --skip-clean
+        --workspace
+        --all-features
+        --target-dir /cargo-target
+        --out Html
+        --out Lcov
+
+      ###################################
+      # 保存覆盖率报告
+      ###################################
+      - BUILD_DIR=/coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}
+      - mkdir -p $BUILD_DIR
+      - cp tarpaulin-report.html $BUILD_DIR/
+      - cp lcov.info $BUILD_DIR/
 
       - rm -rf /coverage/${COVERAGE_PREFIX}-latest
-      - cp -r /coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER} /coverage/${COVERAGE_PREFIX}-latest
+      - cp -r $BUILD_DIR /coverage/${COVERAGE_PREFIX}-latest
 
-      - echo "Cleaning old coverage builds (keep latest 1)..."
-      - |
-        cd /coverage
-        ls -1d ${COVERAGE_PREFIX}-* 2>/dev/null | sort -r | tail -n +2 | while read dir; do
-          echo "Removing old build: $dir"
-          rm -rf "$dir"
-        done
+      ###################################
+      # 清理旧报告（仅保留最新）
+      ###################################
+      - cd /coverage
+      - ls -1d ${COVERAGE_PREFIX}-* | sort -r | tail -n +2 | xargs rm -rf || true
 
-      - echo "Coverage saved to:"
-      - echo "/var/lib/drone/artifacts/coverage/${COVERAGE_PREFIX}-${DRONE_BUILD_NUMBER}"
+      ###################################
+      # 输出 sccache 统计
+      ###################################
+      - sccache --show-stats || true

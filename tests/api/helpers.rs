@@ -34,7 +34,11 @@ pub struct ConfirmationLinks {
 pub(crate) async fn spawn_app() -> TestApp {
     dotenvy::dotenv().ok();
     Lazy::force(&TRACING);
+    
     let email_server = MockServer::start().await;
+    
+    
+    
     let configuration = {
         let mut c = get_configuration().expect("Failed to read configuration.");
         // Use a different database for each test case

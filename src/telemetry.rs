@@ -49,7 +49,7 @@ impl RootSpanBuilder for CustomRootSpanBuilder {
         )
     }
     
-    fn on_request_end<B: actix_web::body::MessageBody>(span: Span, outcome: &Result<actix_web::dev::ServiceResponse<B>, actix_web::Error>) {
+    fn on_request_end<B: actix_web::body::MessageBody>(_span: Span, _outcome: &Result<actix_web::dev::ServiceResponse<B>, actix_web::Error>) {
         //Do nothing.
     }
 }

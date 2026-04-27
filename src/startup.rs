@@ -1,4 +1,5 @@
 use crate::email_client::EmailClient;
+use crate::routes::confirm;
 use crate::routes::{health_check, subscribe};
 use actix_web::dev::Server;
 use actix_web::middleware::Logger;
@@ -6,7 +7,6 @@ use actix_web::web::Data;
 use actix_web::{App, HttpServer, web};
 use sqlx::PgPool;
 use std::net::TcpListener;
-use crate::routes::confirm;
 
 pub fn run(
     listener: TcpListener,
@@ -19,7 +19,7 @@ pub fn run(
     let email_client = Data::new(email_client);
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
+            .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subscribe))
             .route("/subscriptions/confirm", web::get().to(confirm))
@@ -35,7 +35,7 @@ pub fn run(
 
 use crate::configuration::{DatabaseSettings, Settings};
 use sqlx::postgres::PgPoolOptions;
-
+use tracing_actix_web::TracingLogger;
 
 pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
     PgPoolOptions::new()
@@ -70,7 +70,12 @@ impl Application {
         );
         let listener = TcpListener::bind(address)?;
         let port = listener.local_addr()?.port();
-        let server = run(listener, connection_pool, email_client,configuration.application.base_url,)?;
+        let server = run(
+            listener,
+            connection_pool,
+            email_client,
+            configuration.application.base_url,
+        )?;
         // We "save" the bound port in one of `Application`'s fields
         Ok(Self { port, server })
     }
@@ -83,7 +88,6 @@ impl Application {
         self.server.await
     }
 }
-
 
 #[derive(Debug)]
 pub struct ApplicationBaseUrl(pub String);

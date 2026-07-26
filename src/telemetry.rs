@@ -27,9 +27,8 @@ pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
 
-
 use actix_web::dev::ServiceRequest;
-use tracing::{info_span, Span};
+use tracing::{Span, info_span};
 use tracing_actix_web::RootSpanBuilder;
 use uuid::Uuid;
 
@@ -48,8 +47,11 @@ impl RootSpanBuilder for CustomRootSpanBuilder {
             user_agent = ?request.headers().get("user-agent"),
         )
     }
-    
-    fn on_request_end<B: actix_web::body::MessageBody>(_span: Span, _outcome: &Result<actix_web::dev::ServiceResponse<B>, actix_web::Error>) {
+
+    fn on_request_end<B: actix_web::body::MessageBody>(
+        _span: Span,
+        _outcome: &Result<actix_web::dev::ServiceResponse<B>, actix_web::Error>,
+    ) {
         //Do nothing.
     }
 }

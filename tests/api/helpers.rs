@@ -1,10 +1,10 @@
 use once_cell::sync::Lazy;
-use sqlx::{Connection, Executor, PgConnection, PgPool};
+use sqlx::{AssertSqlSafe, Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod2025::configuration::{DatabaseSettings, get_configuration};
+use zero2prod2025::configuration::{get_configuration, DatabaseSettings};
 
 use wiremock::MockServer;
-use zero2prod2025::startup::{Application, get_connection_pool};
+use zero2prod2025::startup::{get_connection_pool, Application};
 use zero2prod2025::telemetry::{get_subscriber, init_subscriber};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -34,11 +34,9 @@ pub struct ConfirmationLinks {
 pub(crate) async fn spawn_app() -> TestApp {
     dotenvy::dotenv().ok();
     Lazy::force(&TRACING);
-    
+
     let email_server = MockServer::start().await;
-    
-    
-    
+
     let configuration = {
         let mut c = get_configuration().expect("Failed to read configuration.");
         // Use a different database for each test case
@@ -69,10 +67,15 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to Postgres");
-    connection
-        .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
+
+    // database_name 来自程序配置/测试生成，不来自用户输入。
+    // PostgreSQL 不支持对 CREATE DATABASE 的数据库名使用 bind 参数，
+    let create_db_query = format!(r#"CREATE DATABASE "{}";"#, config.database_name);
+    sqlx::query(AssertSqlSafe(create_db_query.as_str()))
+        .execute(&mut connection)
         .await
         .expect("Failed to create database.");
+
     // Migrate database
     let connection_pool = PgPool::connect_with(config.with_db())
         .await
@@ -114,5 +117,14 @@ impl TestApp {
         let html = get_link(&body["HtmlBody"].as_str().unwrap());
         let plain_text = get_link(&body["TextBody"].as_str().unwrap());
         ConfirmationLinks { html, plain_text }
+    }
+
+    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
     }
 }

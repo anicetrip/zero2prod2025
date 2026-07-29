@@ -1,6 +1,6 @@
 use validator::ValidateEmail;
 #[derive(Debug)]
-pub struct SubscriberEmail(String);
+pub struct SubscriberEmail(pub(crate) String);
 
 impl SubscriberEmail {
     pub fn parse(s: String) -> Result<Self, String> {

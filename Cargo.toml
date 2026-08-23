@@ -12,13 +12,13 @@ name = "zero2prod"
 
 
 [dependencies]
-base64 = "0.23.0"
-actix-web = "4.14.0"
+base64 = "0.23.1"
+actix-web = "4.15.0"
 tokio = { version = "1.53.1", features = ["rt", "rt-multi-thread", "macros"] }
 
 serde = { version = "1.0.229", features = ["derive"] }
 config = "0.15.25"
-uuid = { version = "1.24.0", features = ["v4"] }
+uuid = { version = "1.25.0", features = ["v4"] }
 
 dotenvy = "0.15.7"
 
@@ -35,15 +35,14 @@ chrono = "0.4.45"
 serde-aux = "4"
 unicode-segmentation = "1.13.3"
 claims = "0.8"
-validator = "0.20.0"
+validator = "0.21.0"
 fake = "5.1.0"
 tracing-actix-web = "0.7.22"
 url = { version = "2.5.8", features = ["serde"] }
 rand = { version = "0.10", features=["std_rng"] }
-thiserror = "2.0.19"
+thiserror = "2.0.20"
 anyhow = "1.0.104"
-sha3 = "0.12.0"
-hex = "0.4.3"
+argon2 = { version = "0.5.3", features = ["std"] }
 
 [dependencies.sqlx]
 version = "0.9.0"
